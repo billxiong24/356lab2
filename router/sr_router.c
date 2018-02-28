@@ -13,6 +13,7 @@
 
 #include <stdio.h>
 #include <assert.h>
+#include <stdbool.h>
 
 
 #include "sr_if.h"
@@ -50,6 +51,52 @@ void sr_init(struct sr_instance* sr)
 
 } /* -- sr_init -- */
 
+/**
+ * If we should forward IP packet, return true. If packet is destined for us, return false.
+ *
+ */
+bool should_forward_packet(struct sr_if *interface, struct sr_ip_hdr *ip_hdr_info) {
+
+  struct sr_if *trav = interface;
+  uint32_t ip_dst = ip_hdr_info->ip_dst;
+
+  while(trav) {
+    if(ip_dst == trav->ip) {
+      return false;
+    }
+    trav = trav->next;
+  }
+
+  return true;
+}
+
+
+void handle_ip_packet(struct sr_instance *sr, struct sr_if *interface, unsigned int len, uint8_t *packet) {
+  /*check length of ip packet*/
+  if(len < sizeof(struct sr_ip_hdr)) {
+    return;
+  }
+
+  /*convert to ip header by stripping of ethernet header*/
+  struct sr_ip_hdr *ip_hdr_info = (struct sr_ip_hdr *) (packet + sizeof(struct sr_ethernet_hdr));
+  
+  /*perform check sum*/ 
+  uint16_t curr_sum = ip_hdr_info->ip_sum; 
+  uint16_t new_sum = cksum((void *) ip_hdr_info, len); 
+
+  if(curr_sum != new_sum) {
+    /*drop packet if checksums dont match*/
+    return;
+  }
+
+  if(should_forward_packet(sr->if_list, ip_hdr_info)) {
+    /*forwarding logic*/
+  }
+  else {
+    /*handle destination packet*/
+  }
+}
+
 /*---------------------------------------------------------------------
  * Method: sr_handlepacket(uint8_t* p,char* interface)
  * Scope:  Global
@@ -77,15 +124,30 @@ void sr_handlepacket(struct sr_instance* sr,
   assert(interface);
 
   printf("*** -> Received packet of length %d \n",len);
-  //interface eth3
-  //packet 255
-  struct sr_if *interfaces = sr_get_interface(sr, interface);
-  if(!interfaces) {
+  struct sr_if *named_interface = sr_get_interface(sr, interface);
+  if(!named_interface) {
     return;
   }
+  
+  if(len < sizeof(struct sr_ethernet_hdr)) {
+    fprintf(stderr, "Packet not correct size.\n");
+    return;
+  }
+  
+  uint16_t ethtype = ethertype(packet);
+  
+  /* got this casting from sr_utils.c in ethertype function */
+  struct sr_ethernet_hdr *ether_hdr_info = (struct sr_ethernet_hdr *) packet;
+  
+  /* handle ip packet */
+  if(ethtype == ethertype_ip) {
+    handle_ip_packet(sr, named_interface, len - sizeof(struct sr_ethernet_hdr), packet);
+  }
 
+  /* handle arp packet */
+  else if(ethtype == ethertype_arp) {
 
-  /* fill in code here */
+  }
 
 }/* end sr_ForwardPacket */
 
