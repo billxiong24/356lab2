@@ -77,6 +77,13 @@ void sr_handlepacket(struct sr_instance* sr,
   assert(interface);
 
   printf("*** -> Received packet of length %d \n",len);
+  //interface eth3
+  //packet 255
+  struct sr_if *interfaces = sr_get_interface(sr, interface);
+  if(!interfaces) {
+    return;
+  }
+
 
   /* fill in code here */
 
