@@ -51,9 +51,17 @@ void sr_init(struct sr_instance* sr)
 
 } /* -- sr_init -- */
 
+static int mask_length(uint32_t subnet_mask) {
+  int len = 0;
+  while(subnet_mask) {
+    len += subnet_mask & 1;
+    subnet_mask >>= 1;
+  }
+  return len;
+}
+
 /**
  * If we should forward IP packet, return true. If packet is destined for us, return false.
- *
  */
 bool should_forward_packet(struct sr_if *interface, struct sr_ip_hdr *ip_hdr_info) {
 
@@ -71,6 +79,29 @@ bool should_forward_packet(struct sr_if *interface, struct sr_ip_hdr *ip_hdr_inf
 }
 
 
+struct sr_rt *longest_prefix_match(struct sr_instance *sr, struct sr_ip_hdr *pack) {
+  uint32_t ip_dst = pack->ip_dst;
+
+  struct sr_rt *table = sr->routing_table;
+  struct sr_rt *ret = 0;
+  int max_len = -1;
+  
+  while(table) {
+
+    uint32_t mask = table->mask.s_addr;
+    int mask_len = mask_length(mask);
+
+    /* destination ip & subnet mask should be the same as interface ip & mask*/
+    if(mask_len > max_len && ((ip_dst & mask) == (table->dest.s_addr & mask))) {
+        max_len = mask_len;
+        ret = table;
+    }
+    table = table->next;
+  }
+  return ret;
+}
+
+
 void handle_ip_packet(struct sr_instance *sr, struct sr_if *interface, unsigned int len, uint8_t *packet) {
   /*check length of ip packet*/
   if(len < sizeof(struct sr_ip_hdr)) {
@@ -82,15 +113,25 @@ void handle_ip_packet(struct sr_instance *sr, struct sr_if *interface, unsigned 
   
   /*perform check sum*/ 
   uint16_t curr_sum = ip_hdr_info->ip_sum; 
+  /*need to zero out check sum before recomputing?? */
+  ip_hdr_info->ip_sum = 0;
   uint16_t new_sum = cksum((void *) ip_hdr_info, len); 
 
+  /*drop packet if checksums dont match*/
   if(curr_sum != new_sum) {
-    /*drop packet if checksums dont match*/
     return;
   }
 
+  /*forwarding logic*/
   if(should_forward_packet(sr->if_list, ip_hdr_info)) {
-    /*forwarding logic*/
+    /*decrement ttl and recompute check sum*/
+    ip_hdr_info->ip_ttl--;
+    ip_hdr_info->ip_sum = 0;
+    uint16_t send_sum = cksum((void *) ip_hdr_info, len);
+    ip_hdr_info->ip_sum = send_sum;
+
+    /*prefix matching*/
+    struct sr_rt *entry = longest_prefix_match(sr, ip_hdr_info);
   }
   else {
     /*handle destination packet*/
