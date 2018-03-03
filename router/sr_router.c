@@ -15,6 +15,7 @@
 #include <assert.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "sr_if.h"
 #include "sr_rt.h"
@@ -52,6 +53,9 @@ void sr_init(struct sr_instance* sr)
 } /* -- sr_init -- */
 
 
+/**
+ * Returns the length of the IP mask (network prefix length).
+ */
 static int mask_length(uint32_t subnet_mask) {
   int len = 0;
   while(subnet_mask) {
@@ -80,6 +84,9 @@ bool should_forward_packet(struct sr_if *interface, struct sr_ip_hdr *ip_hdr_inf
 }
 
 
+/**
+  * Finds the longest prefix match in the routing table.
+  */
 struct sr_rt *longest_prefix_match(struct sr_instance *sr, struct sr_ip_hdr *pack) {
   uint32_t ip_dst = pack->ip_dst;
 
@@ -103,36 +110,41 @@ struct sr_rt *longest_prefix_match(struct sr_instance *sr, struct sr_ip_hdr *pac
 }
 
 
-void handle_ip_packet(struct sr_instance *sr, struct sr_if *interface, unsigned int len, uint8_t *packet) {
+/**
+  * Handles an incoming IP packet.
+  */
+void handle_ip_packet(struct sr_instance *sr, char* interface, unsigned int len, uint8_t *packet) {
   /*check length of ip packet*/
   if(len - sizeof(struct sr_ethernet_hdr) < sizeof(struct sr_ip_hdr)) {
-    /* TODO: send ICMP */
+    /* drop packet */
     return;
   }
 
   /* get the ethernet header*/
   struct sr_ethernet_hdr *eth_hdr_info = (struct sr_ethernet_hdr *) (packet);
 
-  /*convert to ip header by stripping off ethernet header*/
+  /*get the ip header by stripping off ethernet header*/
   struct sr_ip_hdr *ip_hdr_info = (struct sr_ip_hdr *) (packet + sizeof(struct sr_ethernet_hdr));
   
-  /*perform check sum*/ 
+  /*get the check sum*/ 
   uint16_t curr_sum = ip_hdr_info->ip_sum; 
   /*need to zero out check sum before recomputing*/
   ip_hdr_info->ip_sum = 0;
+  /*recompute checksum*/
   uint16_t new_sum = cksum((void *) ip_hdr_info, len); 
 
   /*drop packet if checksums dont match*/
   if(curr_sum != new_sum) {
-    /* TODO: send ICMP */
+    /* drop packet */
     return;
   }
 
   /*forwarding logic*/
   if(should_forward_packet(sr->if_list, ip_hdr_info)) {
     /*check if ttl == 0*/
-    if (ip_hdr_info->ip_ttl - 1 == 0) {
-      /* TODO: send ICMP */
+    if (ip_hdr_info->ip_ttl == 0) {
+      /* send ICMP with type 11, code 0 */
+      send_ICMP_packet(sr, packet, interface, 11, 0);
       return;
     }
 
@@ -147,27 +159,27 @@ void handle_ip_packet(struct sr_instance *sr, struct sr_if *interface, unsigned 
 
     if (rt_entry == NULL) {
       /* no matching entry in routing table */
-      /* TODO: send ICMP */
+      /* send ICMP with type 3, code 0 */
+      send_ICMP_packet(sr, packet, interface, 3, 0);
     }
 
-    ip_hdr_info->ip_src = ip_hdr_info->ip_dst;
+    /*IP src stays the same*/
+    /*IP dst updates to next hop*/
     ip_hdr_info->ip_dst = rt_entry->dest.s_addr;
-
-    int i;
-    for (i = 0; i < ETHER_ADDR_LEN; ++i) {
-      eth_hdr_info->ether_shost[i] = eth_hdr_info->ether_dhost[i];
-    }
 
     /* use ARP to set destination ethernet address */
     struct sr_arpentry *arp_entry = sr_arpcache_lookup(&sr->cache, ip_hdr_info->ip_dst);
+
     if (arp_entry != NULL) {
       /* ARP entry in cache */
+      int i;
       for (i = 0; i < ETHER_ADDR_LEN; ++i) {
         eth_hdr_info->ether_dhost[i] = arp_entry->mac[i];
       }
     }
     else {
       /* ARP entry not in cache */
+      /* TODO: send ARP requests and populate ARP cache */
     }
 
     /* send packet to next hop router */
@@ -176,6 +188,7 @@ void handle_ip_packet(struct sr_instance *sr, struct sr_if *interface, unsigned 
 
   else {
     /*handle destination packet*/
+    /* TODO: handle dstination packet */
   }
 }
 
@@ -208,14 +221,9 @@ void sr_handlepacket(struct sr_instance* sr,
 
   printf("*** -> Received packet of length %d \n",len);
   struct sr_if *named_interface = sr_get_interface(sr, interface);
-
-  if(!named_interface) {
-    /* TODO: send ICMP */
-    return;
-  }
   
   if(len < sizeof(struct sr_ethernet_hdr)) {
-    /* TODO: send ICMP */
+    /* drop packet */
     return;
   }
   
@@ -223,12 +231,52 @@ void sr_handlepacket(struct sr_instance* sr,
   
   /* handle ip packet */
   if(ethtype == ethertype_ip) {
-    handle_ip_packet(sr, named_interface, len, packet);
+    handle_ip_packet(sr, interface, len, packet);
   }
 
   /* handle arp packet */
   else if(ethtype == ethertype_arp) {
-
+    /* TODO: handle arp packet */
   }
 
 }/* end sr_ForwardPacket */
+
+
+/**
+  * Sends ICMP packet to source sender
+  */
+void send_ICMP_packet(struct sr_instance* sr, uint8_t* packet, char* iface, 
+                      uint8_t icmp_type, uint8_t icmp_code) {
+  /* get the ethernet header */
+  struct sr_ethernet_hdr *eth_hdr_info = (struct sr_ethernet_hdr *) (packet);
+
+  /* get the ip header by stripping off ethernet header */
+  struct sr_ip_hdr *ip_hdr_info = (struct sr_ip_hdr *) (packet + sizeof(struct sr_ethernet_hdr));
+
+  /* swap the IP src and dst */
+  uint32_t temp = ip_hdr_info->ip_dst;
+  ip_hdr_info->ip_dst = ip_hdr_info->ip_src;
+  ip_hdr_info->ip_src = temp;
+
+  /* swap the ethernet src and dst */
+  int i;
+  for (i = 0; i < ETHER_ADDR_LEN; i++) {
+    uint8_t temp = eth_hdr_info->ether_dhost[i];
+    eth_hdr_info->ether_dhost[i] = eth_hdr_info->ether_shost[i];
+    eth_hdr_info->ether_shost[i] = temp;
+  }
+
+  /* get the payload */
+  struct sr_icmp_hdr payload;
+  payload.icmp_type = icmp_type;
+  payload.icmp_code = icmp_code;
+  /* add 2 numbers for check sum */
+  payload.icmp_sum = icmp_type + icmp_code;
+
+  /* replace old payload with ICMP payload */
+  memcpy(ip_hdr_info + sizeof(struct sr_ip_hdr), &payload, sizeof(struct sr_icmp_hdr));
+
+  unsigned int len = sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_ip_hdr) + sizeof(struct sr_icmp_hdr);
+
+  sr_send_packet(sr, packet, len, iface);
+}
