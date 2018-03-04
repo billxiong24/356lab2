@@ -11,14 +11,68 @@
 #include "sr_if.h"
 #include "sr_protocol.h"
 
+
+
+
+
+void sr_send_arp(struct sr_instance* sr,uint32_t ip){
+	unsigned int len = sizeof(sr_ethernet_hdr_t)+sizeof(sr_arp_hdr_t);
+	uint8_t *packet = (uint8_t*)malloc(len);
+	sr_ethernet_hdr_t *eth_hdr = (sr_ethernet_hdr_t*)(packet);
+	/* how to send broadcast ??? */
+	/* set ff:ff:ff:ff */
+	memset(eth_hdr->ether_dhost,0xff,6);
+	/* how to get MAC address of self*/
+	printf(sr->host);
+	printf(sr->user);
+/*	eth_hdr->ether_shost = ;*/
+	eth_hdr->ether_type = htons(ethertype_arp);
+
+	sr_arp_hdr_t *arp_hdr = (sr_arp_hdr_t*)(packet+sizeof(sr_ethernet_hdr_t));
+	arp_hdr->ar_hrd = htons(arp_hrd_ethernet);
+	arp_hdr->ar_pro = htons(ethertype_ip);
+	arp_hdr->ar_hln = 0x06;
+	arp_hdr->ar_pln = 0x04;
+	arp_hdr->ar_op = htons(arp_op_request);
+	arp_hdr->ar_tip = ip;
+	memset(arp_hdr->ar_tha,0x00,6);
+
+}
+
+void handle_arpreq(struct sr_instance* sr, struct sr_arpreq *req){
+	time_t curtime = time(NULL);
+	if(difftime(curtime,req->sent) >= 1.0){
+		if(req->times_sent > 5){
+			printf("5 times maximum reached");
+			/* send host unreachable icmp*/
+		}
+		else{
+			/* send arp packet*/
+			sr_send_arp(sr, req->ip);
+			req->sent = curtime;
+			req->sent = curtime;
+		}
+
+	}
+}
+
 /* 
   This function gets called every second. For each request sent out, we keep
   checking whether we should resend an request or destroy the arp request.
   See the comments in the header file for an idea of what it should look like.
 */
 void sr_arpcache_sweepreqs(struct sr_instance *sr) { 
-    /* Fill this in */
+	printf("here0\n");
+	struct sr_arpcache *cache = &sr->cache;
+    struct sr_arpreq *req = cache->requests;
+	printf("%d\n", (req == NULL));
+    for (req = cache->requests; req != NULL; req = req->next) {
+    	printf("here\n");
+    	handle_arpreq(sr, req);
+    }
 }
+
+
 
 /* You should not need to touch the rest of this code. */
 

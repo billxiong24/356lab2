@@ -109,6 +109,22 @@ struct sr_rt *longest_prefix_match(struct sr_instance *sr, struct sr_ip_hdr *pac
   return ret;
 }
 
+void handle_arp_packet(struct sr_instance *sr, char* interface, unsigned int len, uint8_t *packet){
+	sr_arp_hdr_t *arp_hdr = (sr_arp_hdr_t*)(packet+sizeof(sr_ethernet_hdr_t));
+	if(ntohs(arp_hdr->ar_op)==arp_op_request){
+		uint32_t _ip = arp_hdr->ar_tip;
+		struct sr_if *interface = sr_get_interface_by_ip(sr,_ip);
+		if(interface){
+			printf("found the interface\n");
+			struct sr_arpreq *req = sr_arpcache_insert(&sr->cache,arp_hdr->ar_sha,arp_hdr->ar_sip);
+			sr_arpcache_dump(&sr->cache);
+			/*memory management*/
+		}
+	}
+	else if(ntohs(arp_hdr->ar_op)==arp_op_reply){
+
+	}
+}
 
 /**
   * Handles an incoming IP packet.
@@ -176,8 +192,12 @@ void handle_ip_packet(struct sr_instance *sr, char* interface, unsigned int len,
       for (i = 0; i < ETHER_ADDR_LEN; ++i) {
         eth_hdr_info->ether_dhost[i] = arp_entry->mac[i];
       }
+
     }
     else {
+    	printf("hdsfakj/n");
+    	struct sr_arpreq *req =  sr_arpcache_queuereq(&sr->cache, ip_hdr_info->ip_dst, packet, len, rt_entry->interface);
+    	handle_arpreq(req);
       /* ARP entry not in cache */
       /* TODO: send ARP requests and populate ARP cache */
     }
@@ -226,7 +246,6 @@ void sr_handlepacket(struct sr_instance* sr,
     /* drop packet */
     return;
   }
-  
   uint16_t ethtype = ethertype(packet);
   
   /* handle ip packet */
@@ -236,8 +255,11 @@ void sr_handlepacket(struct sr_instance* sr,
 
   /* handle arp packet */
   else if(ethtype == ethertype_arp) {
-    /* TODO: handle arp packet */
+	handle_arp_packet(sr, interface, len, packet);
+    printf("here");
   }
+  printf("rip");
+
 
 }/* end sr_ForwardPacket */
 
