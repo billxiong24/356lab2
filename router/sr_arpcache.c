@@ -12,7 +12,30 @@
 #include "sr_protocol.h"
 
 
+void sr_arp_reply(struct sr_instance* sr,struct sr_if* interface,
+				  const unsigned char* tha,uint32_t tip){
+	unsigned int len = sizeof(sr_ethernet_hdr_t)+sizeof(sr_arp_hdr_t);
+	uint8_t *packet = (uint8_t*)malloc(len);
+	printf("sending arp_reply\n");
+	sr_ethernet_hdr_t *eth_hdr = (sr_ethernet_hdr_t*)(packet);
+	memcpy(eth_hdr->ether_dhost,tha,6);
+	memcpy(eth_hdr->ether_shost,interface->addr,6);
+	eth_hdr->ether_type = htons(ethertype_arp);
 
+	sr_arp_hdr_t *arp_hdr = (sr_arp_hdr_t*)(packet+sizeof(sr_ethernet_hdr_t));
+	arp_hdr->ar_hrd = htons(arp_hrd_ethernet);
+	arp_hdr->ar_pro = htons(ethertype_ip);/*same as 0x0800*/
+	arp_hdr->ar_hln = 0x06;
+	arp_hdr->ar_pln = 0x04;
+	arp_hdr->ar_op = htons(arp_op_reply);
+	memcpy(arp_hdr->ar_sha,interface->addr,6);
+	arp_hdr->ar_sip = interface->ip;
+	memcpy(arp_hdr->ar_tha,tha,6);
+	arp_hdr->ar_tip = tip;
+
+	sr_send_packet(sr,packet,len,interface->name);
+	free(packet);
+}
 
 
 void sr_send_arp(struct sr_instance* sr,uint32_t ip){
@@ -23,8 +46,6 @@ void sr_send_arp(struct sr_instance* sr,uint32_t ip){
 	/* set ff:ff:ff:ff */
 	memset(eth_hdr->ether_dhost,0xff,6);
 	/* how to get MAC address of self*/
-	printf(sr->host);
-	printf(sr->user);
 /*	eth_hdr->ether_shost = ;*/
 	eth_hdr->ether_type = htons(ethertype_arp);
 
@@ -62,12 +83,10 @@ void handle_arpreq(struct sr_instance* sr, struct sr_arpreq *req){
   See the comments in the header file for an idea of what it should look like.
 */
 void sr_arpcache_sweepreqs(struct sr_instance *sr) { 
-	printf("here0\n");
 	struct sr_arpcache *cache = &sr->cache;
     struct sr_arpreq *req = cache->requests;
-	printf("%d\n", (req == NULL));
     for (req = cache->requests; req != NULL; req = req->next) {
-    	printf("here\n");
+    	printf("I'm handling requests \n");
     	handle_arpreq(sr, req);
     }
 }
@@ -118,6 +137,7 @@ struct sr_arpreq *sr_arpcache_queuereq(struct sr_arpcache *cache,
     
     struct sr_arpreq *req;
     for (req = cache->requests; req != NULL; req = req->next) {
+        printf("Added to req \n");
         if (req->ip == ip) {
             break;
         }

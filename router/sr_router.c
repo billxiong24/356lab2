@@ -111,17 +111,26 @@ struct sr_rt *longest_prefix_match(struct sr_instance *sr, struct sr_ip_hdr *pac
 
 void handle_arp_packet(struct sr_instance *sr, char* interface, unsigned int len, uint8_t *packet){
 	sr_arp_hdr_t *arp_hdr = (sr_arp_hdr_t*)(packet+sizeof(sr_ethernet_hdr_t));
+	printf(interface);
 	if(ntohs(arp_hdr->ar_op)==arp_op_request){
-		uint32_t _ip = arp_hdr->ar_tip;
-		struct sr_if *interface = sr_get_interface_by_ip(sr,_ip);
-		if(interface){
+		struct sr_if *interf = sr_get_interface(sr,interface);
+		if(interf){
 			printf("found the interface\n");
+			sr_arp_reply(sr,interf,arp_hdr->ar_sha,arp_hdr->ar_sip);
 			struct sr_arpreq *req = sr_arpcache_insert(&sr->cache,arp_hdr->ar_sha,arp_hdr->ar_sip);
-			sr_arpcache_dump(&sr->cache);
 			/*memory management*/
 		}
 	}
 	else if(ntohs(arp_hdr->ar_op)==arp_op_reply){
+		struct sr_if *interf = sr_get_interface(sr,interface);
+		if(interf){
+			printf(interf->addr);
+			printf(arp_hdr->ar_tha);
+			if(strncmp((const char*)interf->addr, (const char*)arp_hdr->ar_tha, 6) != 0){
+				struct sr_arpreq *req = sr_arpcache_insert(&sr->cache,arp_hdr->ar_sha,arp_hdr->ar_sip);
+			}
+		}
+
 
 	}
 }
@@ -195,9 +204,9 @@ void handle_ip_packet(struct sr_instance *sr, char* interface, unsigned int len,
 
     }
     else {
-    	printf("hdsfakj/n");
+    	printf("Not in arp entry \n");
     	struct sr_arpreq *req =  sr_arpcache_queuereq(&sr->cache, ip_hdr_info->ip_dst, packet, len, rt_entry->interface);
-    	handle_arpreq(req);
+    	handle_arpreq(&sr, req);
       /* ARP entry not in cache */
       /* TODO: send ARP requests and populate ARP cache */
     }
@@ -240,7 +249,6 @@ void sr_handlepacket(struct sr_instance* sr,
   assert(interface);
 
   printf("*** -> Received packet of length %d \n",len);
-  struct sr_if *named_interface = sr_get_interface(sr, interface);
   
   if(len < sizeof(struct sr_ethernet_hdr)) {
     /* drop packet */
@@ -256,9 +264,7 @@ void sr_handlepacket(struct sr_instance* sr,
   /* handle arp packet */
   else if(ethtype == ethertype_arp) {
 	handle_arp_packet(sr, interface, len, packet);
-    printf("here");
   }
-  printf("rip");
 
 
 }/* end sr_ForwardPacket */
