@@ -111,20 +111,19 @@ struct sr_rt *longest_prefix_match(struct sr_instance *sr, uint32_t ip_dst) {
 
 void handle_arp_packet(struct sr_instance *sr, char* interface, unsigned int len, uint8_t *packet){
 	sr_arp_hdr_t *arp_hdr = (sr_arp_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t));
-  printf("arp request from interface: ");
+  printf("arp packet from interface: ");
 	printf(interface);
   printf("\n");
+
 	if(ntohs(arp_hdr->ar_op)==arp_op_request){
 		struct sr_if *interf = sr_get_interface(sr,interface);
 		if(interf){
 			sr_arp_reply(sr,interf,arp_hdr->ar_sha,arp_hdr->ar_sip);
-			struct sr_arpreq *req = sr_arpcache_insert(&sr->cache,arp_hdr->ar_sha,arp_hdr->ar_sip);
-			/*memory management*/
+			/* struct sr_arpreq *req = sr_arpcache_insert(&sr->cache,arp_hdr->ar_sha,arp_hdr->ar_sip); */
 		}
 	}
 
 	else if(ntohs(arp_hdr->ar_op)==arp_op_reply){
-		printf("arp reply \n");
 		struct sr_if *interf = sr_get_interface(sr,interface);
 		if(interf){
 			if(strncmp((const char*)interf->addr, (const char*)arp_hdr->ar_tha, 6) == 0){
@@ -142,6 +141,7 @@ void handle_arp_packet(struct sr_instance *sr, char* interface, unsigned int len
 					}
 				}
 			}
+
 		}
 	}
 }
