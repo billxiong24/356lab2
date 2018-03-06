@@ -92,7 +92,6 @@ bool handle_arpreq(struct sr_instance* sr, struct sr_arpreq *req){
 		}
 		else{
 			/* send arp packet*/
-	    	printf("I'm handling requests \n");
 			sr_arp_request(sr, req->ip);
 			req->sent = now;
 			req->times_sent++;
@@ -110,7 +109,6 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
 	struct sr_arpcache *cache = &sr->cache;
     struct sr_arpreq *req = cache->requests;
     for (req = cache->requests; req != NULL; req = req->next) {
-    	printf("Request in the queue\n");
     	if(handle_arpreq(sr, req)){
 
     	}
@@ -168,7 +166,6 @@ struct sr_arpreq *sr_arpcache_queuereq(struct sr_arpcache *cache,
     
     struct sr_arpreq *req;
     for (req = cache->requests; req != NULL; req = req->next) {
-        printf("Added to req \n");
         if (req->ip == ip) {
             break;
         }
