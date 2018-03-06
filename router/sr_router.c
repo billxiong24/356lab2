@@ -192,6 +192,7 @@ void handle_ip_packet(struct sr_instance *sr, char* interface, unsigned int len,
     if (rt_entry == NULL) {
       /* no matching entry in routing table */
       /* send ICMP with type 3, code 0 */
+      printf("No matching entry in routing table\n");
       send_ICMP_packet(sr, packet, interface, len, 3, 0);
     }
 
@@ -305,18 +306,19 @@ void send_ICMP_packet(struct sr_instance* sr, uint8_t* packet, char* iface,
   /* get the ICMP header */
   struct sr_icmp_hdr *icmp_hdr = (struct sr_icmp_hdr *)(packet + sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_ip_hdr));
 
-  /* swap the IP src and dst */
-  uint32_t temp = ip_hdr_info->ip_dst;
+  struct sr_if *interf = sr_get_interface(sr, iface);
+
+  /* update the IP src and dst */
   ip_hdr_info->ip_dst = ip_hdr_info->ip_src;
-  ip_hdr_info->ip_src = temp;
+  ip_hdr_info->ip_src = interf->ip;
+  ip_hdr_info->ip_sum = 0;
   ip_hdr_info->ip_sum = cksum((void *)(ip_hdr_info), sizeof(struct sr_ip_hdr));
 
-  /* swap the ethernet src and dst */
+  /* update the ethernet src and dst */
   int i;
   for (i = 0; i < ETHER_ADDR_LEN; i++) {
-    uint8_t temp = eth_hdr_info->ether_dhost[i];
     eth_hdr_info->ether_dhost[i] = eth_hdr_info->ether_shost[i];
-    eth_hdr_info->ether_shost[i] = temp;
+    eth_hdr_info->ether_shost[i] = interf->addr[i];
   }
 
   /* get the payload */
