@@ -145,7 +145,6 @@ void handle_arp_packet(struct sr_instance *sr, char* interface, unsigned int len
   * Handles an incoming IP packet.
   */
 void handle_ip_packet(struct sr_instance *sr, char* interface, unsigned int len, uint8_t *packet) {
-  puts("check1");
   /*check length of ip packet*/
 	if(len - sizeof(struct sr_ethernet_hdr) < sizeof(struct sr_ip_hdr)) {
     /* drop packet */
@@ -171,11 +170,8 @@ void handle_ip_packet(struct sr_instance *sr, char* interface, unsigned int len,
     return;
   }
 
-  puts("check2");
-
   /*forwarding logic*/
   if(should_forward_packet(sr->if_list, ip_hdr_info)) {
-    puts("check3");
     /*check if ttl == 0*/
     if (ip_hdr_info->ip_ttl == 0) {
       /* send ICMP with type 11, code 0 */
@@ -198,10 +194,6 @@ void handle_ip_packet(struct sr_instance *sr, char* interface, unsigned int len,
       /* send ICMP with type 3, code 0 */
       send_ICMP_packet(sr, packet, interface, len, 3, 0);
     }
-
-    /*IP src stays the same*/
-    /*IP dst updates to next hop*/
-    ip_hdr_info->ip_dst = rt_entry->dest.s_addr;
 
     /* use ARP to set destination ethernet address */
     struct sr_arpentry *arp_entry = sr_arpcache_lookup(&sr->cache, ip_hdr_info->ip_dst);
