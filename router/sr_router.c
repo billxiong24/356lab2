@@ -119,29 +119,23 @@ void handle_arp_packet(struct sr_instance *sr, char* interface, unsigned int len
 		struct sr_if *interf = sr_get_interface(sr,interface);
 		if(interf){
 			sr_arp_reply(sr,interf,arp_hdr->ar_sha,arp_hdr->ar_sip);
-			/* struct sr_arpreq *req = sr_arpcache_insert(&sr->cache,arp_hdr->ar_sha,arp_hdr->ar_sip); */
 		}
 	}
 
 	else if(ntohs(arp_hdr->ar_op)==arp_op_reply){
 		struct sr_if *interf = sr_get_interface(sr,interface);
 		if(interf){
-			if(strncmp((const char*)interf->addr, (const char*)arp_hdr->ar_tha, 6) == 0){
-				struct sr_arpreq *req = sr_arpcache_insert(&sr->cache,arp_hdr->ar_sha,arp_hdr->ar_sip);
-				if(req){
-					struct sr_packet* ip_packet = req->packets;
-					print_hdrs(ip_packet->buf, ip_packet->len);
-					while(ip_packet){
-						struct sr_ethernet_hdr *ether_hdr = (struct sr_ethernet_hdr* )(ip_packet->buf);
-						memcpy(ether_hdr->ether_shost, interf->addr, 6);
-						memcpy(ether_hdr->ether_dhost, arp_hdr->ar_sha, 6);
-						print_hdrs(ip_packet->buf, ip_packet->len);
-						sr_send_packet(sr, ip_packet->buf, ip_packet->len, ip_packet->iface);
-						ip_packet = ip_packet->next;
-					}
+			struct sr_arpreq *req = sr_arpcache_insert(&sr->cache,arp_hdr->ar_sha,arp_hdr->ar_sip);
+			if(req){
+				struct sr_packet* ip_packet = req->packets;
+				while(ip_packet){
+					struct sr_ethernet_hdr *ether_hdr = (struct sr_ethernet_hdr* )(ip_packet->buf);
+					memcpy(ether_hdr->ether_shost, interf->addr, 6);
+					memcpy(ether_hdr->ether_dhost, arp_hdr->ar_sha, 6);
+					sr_send_packet(sr, ip_packet->buf, ip_packet->len, ip_packet->iface);
+					ip_packet = ip_packet->next;
 				}
 			}
-
 		}
 	}
 }
@@ -151,6 +145,7 @@ void handle_arp_packet(struct sr_instance *sr, char* interface, unsigned int len
   * Handles an incoming IP packet.
   */
 void handle_ip_packet(struct sr_instance *sr, char* interface, unsigned int len, uint8_t *packet) {
+  puts("check1");
   /*check length of ip packet*/
 	if(len - sizeof(struct sr_ethernet_hdr) < sizeof(struct sr_ip_hdr)) {
     /* drop packet */
@@ -168,7 +163,7 @@ void handle_ip_packet(struct sr_instance *sr, char* interface, unsigned int len,
   /*need to zero out check sum before recomputing*/
   ip_hdr_info->ip_sum = 0;
   /*recompute checksum*/
-  uint16_t new_sum = cksum((void *) ip_hdr_info, len); 
+  uint16_t new_sum = cksum((void *) ip_hdr_info, sizeof(struct sr_ip_hdr)); 
 
   /*drop packet if checksums dont match*/
   if(curr_sum != new_sum) {
@@ -176,8 +171,11 @@ void handle_ip_packet(struct sr_instance *sr, char* interface, unsigned int len,
     return;
   }
 
+  puts("check2");
+
   /*forwarding logic*/
   if(should_forward_packet(sr->if_list, ip_hdr_info)) {
+    puts("check3");
     /*check if ttl == 0*/
     if (ip_hdr_info->ip_ttl == 0) {
       /* send ICMP with type 11, code 0 */
@@ -188,7 +186,7 @@ void handle_ip_packet(struct sr_instance *sr, char* interface, unsigned int len,
     /*decrement ttl and recompute check sum*/
     ip_hdr_info->ip_ttl--;
     ip_hdr_info->ip_sum = 0;
-    uint16_t send_sum = cksum((void *) ip_hdr_info, len);
+    uint16_t send_sum = cksum((void *) ip_hdr_info, sizeof(struct sr_ip_hdr));
     ip_hdr_info->ip_sum = send_sum;
 
     /*prefix matching*/
