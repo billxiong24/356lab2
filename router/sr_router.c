@@ -111,38 +111,40 @@ struct sr_rt *longest_prefix_match(struct sr_instance *sr, uint32_t ip_dst) {
 
 void handle_arp_packet(struct sr_instance *sr, char* interface, unsigned int len, uint8_t *packet){
 	sr_arp_hdr_t *arp_hdr = (sr_arp_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t));
-  printf("arp request from interface: ");
+  printf("arp packet from interface: ");
 	printf(interface);
   printf("\n");
+
 	if(ntohs(arp_hdr->ar_op)==arp_op_request){
 		struct sr_if *interf = sr_get_interface(sr,interface);
 		if(interf){
 			sr_arp_reply(sr,interf,arp_hdr->ar_sha,arp_hdr->ar_sip);
-			struct sr_arpreq *req = sr_arpcache_insert(&sr->cache,arp_hdr->ar_sha,arp_hdr->ar_sip);
-			/*memory management*/
+			/* struct sr_arpreq *req = sr_arpcache_insert(&sr->cache,arp_hdr->ar_sha,arp_hdr->ar_sip); */
 		}
 	}
 
 	else if(ntohs(arp_hdr->ar_op)==arp_op_reply){
-		printf("arp reply \n");
 		struct sr_if *interf = sr_get_interface(sr,interface);
 		if(interf){
-			if(strncmp((const char*)interf->addr, (const char*)arp_hdr->ar_tha, 6) == 0){
-				struct sr_arpreq *req = sr_arpcache_insert(&sr->cache,arp_hdr->ar_sha,arp_hdr->ar_sip);
-				if(req){
-					struct sr_packet* ip_packet = req->packets;
-					while(ip_packet){
-						struct sr_ethernet_hdr *ether_hdr = (struct sr_ethernet_hdr* )(ip_packet);
-						struct sr_ip_hdr *ip_hdr = (struct sr_ip_hdr*)((uint8_t *)ip_packet + sizeof(struct sr_ethernet_hdr));
+      struct sr_arpreq *req = sr_arpcache_insert(&sr->cache,arp_hdr->ar_sha,arp_hdr->ar_sip);
+        if(req){
+          struct sr_packet* ip_packet = req->packets;
+          while(ip_packet){
+            uint8_t *buffer = ip_packet->buf;
+            struct sr_ethernet_hdr *ether_hdr = (struct sr_ethernet_hdr *)(buffer);
+            struct sr_ip_hdr *ip_hdr = (struct sr_ip_hdr*)(buffer + sizeof(struct sr_ethernet_hdr));
             memcpy(ether_hdr->ether_shost, interf->addr, 6);
-						memcpy(ether_hdr->ether_dhost, arp_hdr->ar_sha, 6);
-						/* struct sr_if* iface = sr_get_interface_by_ip(sr, ip_hdr->ip_dst); */
-						sr_send_packet(sr, ip_packet, sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_ip_hdr) 
+            memcpy(ether_hdr->ether_dhost, arp_hdr->ar_sha, 6);
+
+            sr_send_packet(sr, buffer, sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_ip_hdr) 
               + sizeof(struct sr_icmp_hdr), interface);
             ip_packet = ip_packet->next;
-					}
-				}
-			}
+          }
+        }
+
+      /*
+			if(strncmp((const char*)interf->addr, (const char*)arp_hdr->ar_tha, 6) == 0) {}
+      */
 		}
 	}
 }
