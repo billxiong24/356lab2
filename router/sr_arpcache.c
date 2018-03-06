@@ -46,6 +46,7 @@ void sr_arp_reply(struct sr_instance* sr,struct sr_if* interface,
 
 
 void sr_arp_request(struct sr_instance* sr,uint32_t ip){
+	printf("sending arp_request\n");
 	unsigned int len = sizeof(sr_ethernet_hdr_t)+sizeof(sr_arp_hdr_t);
 	uint8_t *packet = (uint8_t*)malloc(len);
 	sr_ethernet_hdr_t *eth_hdr = (sr_ethernet_hdr_t*)(packet);
@@ -91,6 +92,7 @@ bool handle_arpreq(struct sr_instance* sr, struct sr_arpreq *req){
 		}
 		else{
 			/* send arp packet*/
+	    	printf("I'm handling requests \n");
 			sr_arp_request(sr, req->ip);
 			req->sent = now;
 			req->times_sent++;
@@ -104,11 +106,11 @@ bool handle_arpreq(struct sr_instance* sr, struct sr_arpreq *req){
   checking whether we should resend an request or destroy the arp request.
   See the comments in the header file for an idea of what it should look like.
 */
-void sr_arpcache_sweepreqs(struct sr_instance *sr) { 
+void sr_arpcache_sweepreqs(struct sr_instance *sr) {
 	struct sr_arpcache *cache = &sr->cache;
     struct sr_arpreq *req = cache->requests;
     for (req = cache->requests; req != NULL; req = req->next) {
-    	printf("I'm handling requests \n");
+    	printf("Request in the queue\n");
     	if(handle_arpreq(sr, req)){
 
     	}

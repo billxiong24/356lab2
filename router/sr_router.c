@@ -123,12 +123,24 @@ void handle_arp_packet(struct sr_instance *sr, char* interface, unsigned int len
 	}
 
 	else if(ntohs(arp_hdr->ar_op)==arp_op_reply){
+		printf("arp reply \n");
 		struct sr_if *interf = sr_get_interface(sr,interface);
 		if(interf){
 			printf(interf->addr);
 			printf(arp_hdr->ar_tha);
-			if(strncmp((const char*)interf->addr, (const char*)arp_hdr->ar_tha, 6) != 0){
+			if(strncmp((const char*)interf->addr, (const char*)arp_hdr->ar_tha, 6) == 0){
 				struct sr_arpreq *req = sr_arpcache_insert(&sr->cache,arp_hdr->ar_sha,arp_hdr->ar_sip);
+				if(req){
+					struct sr_packet* ip_packet = req->packets;
+					while(ip_packet){
+						struct sr_ethernet_hdr *ether_hdr = (struct sr_ethernet_hdr* )(ip_packet);
+						struct sr_ip_hdr *ip_hdr = (struct sr_ip_hdr*)( ether_hdr + sizeof(struct sr_ethernet_hdr ));
+						memcpy(ether_hdr->ether_dhost, arp_hdr->ar_sha, 6);
+						struct sr_if* iface = sr_get_interface_by_ip(sr, ip_hdr->ip_dst);
+						sr_send_packet(sr, ip_packet, ip_packet->len, iface);
+
+					}
+				}
 			}
 		}
 	}
@@ -140,7 +152,7 @@ void handle_arp_packet(struct sr_instance *sr, char* interface, unsigned int len
   */
 void handle_ip_packet(struct sr_instance *sr, char* interface, unsigned int len, uint8_t *packet) {
   /*check length of ip packet*/
-  if(len - sizeof(struct sr_ethernet_hdr) < sizeof(struct sr_ip_hdr)) {
+	if(len - sizeof(struct sr_ethernet_hdr) < sizeof(struct sr_ip_hdr)) {
     /* drop packet */
     return;
   }
@@ -194,13 +206,17 @@ void handle_ip_packet(struct sr_instance *sr, char* interface, unsigned int len,
 
     /* use ARP to set destination ethernet address */
     struct sr_arpentry *arp_entry = sr_arpcache_lookup(&sr->cache, ip_hdr_info->ip_dst);
-
     if (arp_entry == NULL) {
       /* ARP entry not in cache -- populate ARP cache */
       printf("Not in arp entry \n");
       struct sr_arpreq *req = sr_arpcache_queuereq(&sr->cache, ip_hdr_info->ip_dst, packet, len, rt_entry->interface);
+      printf("Check 0 \n");
+
       handle_arpreq(&sr, req);
+      printf("Check 1 \n");
     }
+    sleep(4);
+    arp_entry = sr_arpcache_lookup(&sr->cache, ip_hdr_info->ip_dst);
 
     /* set ethernet destination address */
     int i;
