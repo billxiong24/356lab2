@@ -196,14 +196,15 @@ void handle_ip_packet(struct sr_instance *sr, char* interface, unsigned int len,
     }
 
     /* use ARP to set destination ethernet address */
-    struct sr_arpentry *arp_entry = sr_arpcache_lookup(&sr->cache, ip_hdr_info->ip_dst);
+    struct sr_arpentry *arp_entry = sr_arpcache_lookup(&sr->cache, rt_entry->dest.s_addr);
+
     if (arp_entry != NULL) {
       /* set ethernet source and destination address */
-
       printf("In arp cache \n");
+      struct sr_if *interf = sr_get_interface(sr, rt_entry->interface);
+
       int i;
       for (i = 0; i < ETHER_ADDR_LEN; ++i) {
-    	struct sr_if *interf = sr_get_interface(sr,rt_entry->interface);
         eth_hdr_info->ether_shost[i] = interf->addr[i];
         eth_hdr_info->ether_dhost[i] = arp_entry->mac[i];
       }
@@ -214,7 +215,6 @@ void handle_ip_packet(struct sr_instance *sr, char* interface, unsigned int len,
     else {
       /* ARP entry not in cache -- populate ARP cache */
       printf("Not in arp cache \n");
-
       struct sr_arpreq *req = sr_arpcache_queuereq(&sr->cache, ip_hdr_info->ip_dst, packet, len, rt_entry->interface);
       handle_arpreq(&sr, req);
     }
