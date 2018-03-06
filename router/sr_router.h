@@ -56,6 +56,7 @@ struct sr_instance
     FILE* logfile;
 };
 
+struct sr_rt *longest_prefix_match(struct sr_instance *sr, uint32_t ip_dst);
 /* -- sr_main.c -- */
 int sr_verify_routing_table(struct sr_instance* sr);
 

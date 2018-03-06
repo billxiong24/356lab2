@@ -6,8 +6,10 @@
 #include <pthread.h>
 #include <sched.h>
 #include <string.h>
+#include <stdbool.h>
 #include "sr_arpcache.h"
 #include "sr_router.h"
+#include "sr_rt.h"
 #include "sr_if.h"
 #include "sr_protocol.h"
 
@@ -17,6 +19,7 @@ void sr_arp_reply(struct sr_instance* sr,struct sr_if* interface,
 	unsigned int len = sizeof(sr_ethernet_hdr_t)+sizeof(sr_arp_hdr_t);
 	uint8_t *packet = (uint8_t*)malloc(len);
 	printf("sending arp_reply\n");
+
 	sr_ethernet_hdr_t *eth_hdr = (sr_ethernet_hdr_t*)(packet);
 	memcpy(eth_hdr->ether_dhost,tha,6);
 	memcpy(eth_hdr->ether_shost,interface->addr,6);
@@ -29,8 +32,12 @@ void sr_arp_reply(struct sr_instance* sr,struct sr_if* interface,
 	arp_hdr->ar_pln = 0x04;
 	arp_hdr->ar_op = htons(arp_op_reply);
 	memcpy(arp_hdr->ar_sha,interface->addr,6);
+	DebugMAC(arp_hdr->ar_sha);
+
 	arp_hdr->ar_sip = interface->ip;
 	memcpy(arp_hdr->ar_tha,tha,6);
+	DebugMAC(arp_hdr->ar_tha);
+
 	arp_hdr->ar_tip = tip;
 
 	sr_send_packet(sr,packet,len,interface->name);
@@ -38,7 +45,7 @@ void sr_arp_reply(struct sr_instance* sr,struct sr_if* interface,
 }
 
 
-void sr_send_arp(struct sr_instance* sr,uint32_t ip){
+void sr_arp_request(struct sr_instance* sr,uint32_t ip){
 	unsigned int len = sizeof(sr_ethernet_hdr_t)+sizeof(sr_arp_hdr_t);
 	uint8_t *packet = (uint8_t*)malloc(len);
 	sr_ethernet_hdr_t *eth_hdr = (sr_ethernet_hdr_t*)(packet);
@@ -46,7 +53,6 @@ void sr_send_arp(struct sr_instance* sr,uint32_t ip){
 	/* set ff:ff:ff:ff */
 	memset(eth_hdr->ether_dhost,0xff,6);
 	/* how to get MAC address of self*/
-/*	eth_hdr->ether_shost = ;*/
 	eth_hdr->ether_type = htons(ethertype_arp);
 
 	sr_arp_hdr_t *arp_hdr = (sr_arp_hdr_t*)(packet+sizeof(sr_ethernet_hdr_t));
@@ -58,23 +64,39 @@ void sr_send_arp(struct sr_instance* sr,uint32_t ip){
 	arp_hdr->ar_tip = ip;
 	memset(arp_hdr->ar_tha,0x00,6);
 
+	struct sr_rt *rtb = longest_prefix_match(sr, ip);
+	if(rtb){
+		struct sr_if* interface = sr_get_interface(sr,rtb->interface);
+		memcpy(eth_hdr->ether_shost, interface->addr, 6);
+		memcpy(arp_hdr->ar_sha, interface->addr, 6);
+		arp_hdr->ar_sip = interface->ip;
+		sr_send_packet(sr,packet,len,interface->name);
+	}
+	else{
+		free(packet);
+		return;
+	}
+
+
 }
 
-void handle_arpreq(struct sr_instance* sr, struct sr_arpreq *req){
-	time_t curtime = time(NULL);
-	if(difftime(curtime,req->sent) >= 1.0){
+bool handle_arpreq(struct sr_instance* sr, struct sr_arpreq *req){
+	time_t now = time(NULL);
+	if(difftime(now,req->sent) >= 1.0){
 		if(req->times_sent > 5){
 			printf("5 times maximum reached");
 			/* send host unreachable icmp*/
+			sr_arpreq_destroy(&sr->cache, req);
+			return false;
 		}
 		else{
 			/* send arp packet*/
-			sr_send_arp(sr, req->ip);
-			req->sent = curtime;
-			req->sent = curtime;
+			sr_arp_request(sr, req->ip);
+			req->sent = now;
+			req->times_sent++;
 		}
-
 	}
+	return true;
 }
 
 /* 
@@ -87,7 +109,14 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
     struct sr_arpreq *req = cache->requests;
     for (req = cache->requests; req != NULL; req = req->next) {
     	printf("I'm handling requests \n");
-    	handle_arpreq(sr, req);
+    	if(handle_arpreq(sr, req)){
+
+    	}
+    	else{
+
+    	}
+
+
     }
 }
 

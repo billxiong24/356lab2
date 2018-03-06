@@ -69,6 +69,7 @@
 #include <inttypes.h>
 #include <time.h>
 #include <pthread.h>
+#include <stdbool.h>
 #include "sr_if.h"
 
 #define SR_ARPCACHE_SZ    100  
@@ -146,6 +147,6 @@ void sr_arpcache_dump(struct sr_arpcache *cache);
 int   sr_arpcache_init(struct sr_arpcache *cache);
 int   sr_arpcache_destroy(struct sr_arpcache *cache);
 void *sr_arpcache_timeout(void *cache_ptr);
-void handle_arpreq(struct sr_instance* sr, struct sr_arpreq *req);
+bool handle_arpreq(struct sr_instance* sr, struct sr_arpreq *req);
 void sr_arp_reply(struct sr_instance*,struct sr_if*,const unsigned char*,uint32_t);
 #endif

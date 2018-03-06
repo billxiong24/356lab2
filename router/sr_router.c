@@ -87,8 +87,7 @@ bool should_forward_packet(struct sr_if *interface, struct sr_ip_hdr *ip_hdr_inf
 /**
   * Finds the longest prefix match in the routing table.
   */
-struct sr_rt *longest_prefix_match(struct sr_instance *sr, struct sr_ip_hdr *pack) {
-  uint32_t ip_dst = pack->ip_dst;
+struct sr_rt *longest_prefix_match(struct sr_instance *sr, uint32_t ip_dst) {
 
   struct sr_rt *table = sr->routing_table;
   struct sr_rt *ret = 0;
@@ -180,7 +179,7 @@ void handle_ip_packet(struct sr_instance *sr, char* interface, unsigned int len,
     ip_hdr_info->ip_sum = send_sum;
 
     /*prefix matching*/
-    struct sr_rt *rt_entry = longest_prefix_match(sr, ip_hdr_info);
+    struct sr_rt *rt_entry = longest_prefix_match(sr, ip_hdr_info->ip_dst);
 
     if (rt_entry == NULL) {
       /* no matching entry in routing table */
