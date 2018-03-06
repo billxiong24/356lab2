@@ -190,6 +190,7 @@ struct sr_arpreq *sr_arpcache_queuereq(struct sr_arpcache *cache,
         strncpy(new_pkt->iface, iface, sr_IFACE_NAMELEN);
         new_pkt->next = req->packets;
         req->packets = new_pkt;
+        print_hdrs(new_pkt->buf, 98);
     }
     
     pthread_mutex_unlock(&(cache->lock));

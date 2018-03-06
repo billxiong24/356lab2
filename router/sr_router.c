@@ -131,15 +131,14 @@ void handle_arp_packet(struct sr_instance *sr, char* interface, unsigned int len
 				struct sr_arpreq *req = sr_arpcache_insert(&sr->cache,arp_hdr->ar_sha,arp_hdr->ar_sip);
 				if(req){
 					struct sr_packet* ip_packet = req->packets;
+					print_hdrs(ip_packet->buf, ip_packet->len);
 					while(ip_packet){
-						struct sr_ethernet_hdr *ether_hdr = (struct sr_ethernet_hdr* )(ip_packet);
-						struct sr_ip_hdr *ip_hdr = (struct sr_ip_hdr*)((uint8_t *)ip_packet + sizeof(struct sr_ethernet_hdr));
-            memcpy(ether_hdr->ether_shost, interf->addr, 6);
+						struct sr_ethernet_hdr *ether_hdr = (struct sr_ethernet_hdr* )(ip_packet->buf);
+						memcpy(ether_hdr->ether_shost, interf->addr, 6);
 						memcpy(ether_hdr->ether_dhost, arp_hdr->ar_sha, 6);
-						/* struct sr_if* iface = sr_get_interface_by_ip(sr, ip_hdr->ip_dst); */
-						sr_send_packet(sr, ip_packet, sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_ip_hdr) 
-              + sizeof(struct sr_icmp_hdr), interface);
-            ip_packet = ip_packet->next;
+						print_hdrs(ip_packet->buf, ip_packet->len);
+						sr_send_packet(sr, ip_packet->buf, ip_packet->len, ip_packet->iface);
+						ip_packet = ip_packet->next;
 					}
 				}
 			}
