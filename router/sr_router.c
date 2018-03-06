@@ -133,7 +133,7 @@ void handle_arp_packet(struct sr_instance *sr, char* interface, unsigned int len
 					struct sr_packet* ip_packet = req->packets;
 					while(ip_packet){
 						struct sr_ethernet_hdr *ether_hdr = (struct sr_ethernet_hdr* )(ip_packet);
-						struct sr_ip_hdr *ip_hdr = (struct sr_ip_hdr*)(ip_packet + sizeof(struct sr_ethernet_hdr));
+						struct sr_ip_hdr *ip_hdr = (struct sr_ip_hdr*)((uint8_t *)ip_packet + sizeof(struct sr_ethernet_hdr));
             memcpy(ether_hdr->ether_shost, interf->addr, 6);
 						memcpy(ether_hdr->ether_dhost, arp_hdr->ar_sha, 6);
 						/* struct sr_if* iface = sr_get_interface_by_ip(sr, ip_hdr->ip_dst); */
