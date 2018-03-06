@@ -108,6 +108,7 @@ struct sr_rt *longest_prefix_match(struct sr_instance *sr, uint32_t ip_dst) {
   return ret;
 }
 
+
 void handle_arp_packet(struct sr_instance *sr, char* interface, unsigned int len, uint8_t *packet){
 	sr_arp_hdr_t *arp_hdr = (sr_arp_hdr_t*)(packet+sizeof(sr_ethernet_hdr_t));
 	printf(interface);
@@ -120,6 +121,7 @@ void handle_arp_packet(struct sr_instance *sr, char* interface, unsigned int len
 			/*memory management*/
 		}
 	}
+
 	else if(ntohs(arp_hdr->ar_op)==arp_op_reply){
 		struct sr_if *interf = sr_get_interface(sr,interface);
 		if(interf){
@@ -129,10 +131,9 @@ void handle_arp_packet(struct sr_instance *sr, char* interface, unsigned int len
 				struct sr_arpreq *req = sr_arpcache_insert(&sr->cache,arp_hdr->ar_sha,arp_hdr->ar_sip);
 			}
 		}
-
-
 	}
 }
+
 
 /**
   * Handles an incoming IP packet.
@@ -194,20 +195,17 @@ void handle_ip_packet(struct sr_instance *sr, char* interface, unsigned int len,
     /* use ARP to set destination ethernet address */
     struct sr_arpentry *arp_entry = sr_arpcache_lookup(&sr->cache, ip_hdr_info->ip_dst);
 
-    if (arp_entry != NULL) {
-      /* ARP entry in cache */
-      int i;
-      for (i = 0; i < ETHER_ADDR_LEN; ++i) {
-        eth_hdr_info->ether_dhost[i] = arp_entry->mac[i];
-      }
-
+    if (arp_entry == NULL) {
+      /* ARP entry not in cache -- populate ARP cache */
+      printf("Not in arp entry \n");
+      struct sr_arpreq *req = sr_arpcache_queuereq(&sr->cache, ip_hdr_info->ip_dst, packet, len, rt_entry->interface);
+      handle_arpreq(&sr, req);
     }
-    else {
-    	printf("Not in arp entry \n");
-    	struct sr_arpreq *req =  sr_arpcache_queuereq(&sr->cache, ip_hdr_info->ip_dst, packet, len, rt_entry->interface);
-    	handle_arpreq(&sr, req);
-      /* ARP entry not in cache */
-      /* TODO: send ARP requests and populate ARP cache */
+
+    /* set ethernet destination address */
+    int i;
+    for (i = 0; i < ETHER_ADDR_LEN; ++i) {
+      eth_hdr_info->ether_dhost[i] = arp_entry->mac[i];
     }
 
     /* send packet to next hop router */
@@ -215,8 +213,24 @@ void handle_ip_packet(struct sr_instance *sr, char* interface, unsigned int len,
   }
 
   else {
-    /*handle destination packet*/
-    /* TODO: handle dstination packet */
+    /* handle destination packet */
+    uint8_t *payload = (uint8_t *)(packet + sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_ip_hdr));
+
+    if (ethertype(payload) == ip_protocol_icmp) {
+      /* IP paylaod is ICMP message */
+      struct sr_icmp_hdr *icmp_hdr = (struct sr_icmp_hdr *) payload;
+
+      if (icmp_hdr->icmp_type == 8 && icmp_hdr->icmp_type == 0) {
+        /* ICMP message is echo request */
+        uint16_t sent_sum = icmp_hdr->icmp_sum;
+        icmp_hdr->icmp_sum = 0;
+
+        if (sent_sum == cksum((void *) icmp_hdr, sizeof(struct sr_icmp_hdr))) {
+          /* valid checksum -- send ICMP echo reply */
+          send_ICMP_packet(sr, packet, interface, 0, 0);
+        }
+      }
+    }
   }
 }
 
@@ -262,10 +276,8 @@ void sr_handlepacket(struct sr_instance* sr,
 
   /* handle arp packet */
   else if(ethtype == ethertype_arp) {
-	handle_arp_packet(sr, interface, len, packet);
+    handle_arp_packet(sr, interface, len, packet);
   }
-
-
 }/* end sr_ForwardPacket */
 
 
