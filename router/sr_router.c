@@ -182,7 +182,7 @@ void handle_ip_packet(struct sr_instance *sr, char* interface, unsigned int len,
     /*check if ttl == 0*/
     if (ip_hdr_info->ip_ttl == 0) {
       /* send ICMP with type 11, code 0 */
-      send_ICMP_packet(sr, packet, interface, 11, 0);
+      send_ICMP_packet(sr, packet, interface, len, 11, 0);
       return;
     }
 
@@ -198,7 +198,7 @@ void handle_ip_packet(struct sr_instance *sr, char* interface, unsigned int len,
     if (rt_entry == NULL) {
       /* no matching entry in routing table */
       /* send ICMP with type 3, code 0 */
-      send_ICMP_packet(sr, packet, interface, 3, 0);
+      send_ICMP_packet(sr, packet, interface, len, 3, 0);
     }
 
     /*IP src stays the same*/
@@ -231,21 +231,23 @@ void handle_ip_packet(struct sr_instance *sr, char* interface, unsigned int len,
 
   else {
     /* handle destination packet */
-    uint8_t *payload = (uint8_t *)(packet + sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_ip_hdr));
+    struct sr_ip_hdr *ip_hdr = (struct sr_ip_hdr *)(packet + sizeof(struct sr_ethernet_hdr));
 
-    if (ethertype(payload) == ip_protocol_icmp) {
+    if (ip_protocol(ip_hdr) == ip_protocol_icmp) {
       /* IP paylaod is ICMP message */
-      struct sr_icmp_hdr *icmp_hdr = (struct sr_icmp_hdr *) payload;
+      struct sr_icmp_hdr *icmp_hdr = (struct sr_icmp_hdr *)(packet + sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_ip_hdr));
 
-      if (icmp_hdr->icmp_type == 8 && icmp_hdr->icmp_type == 0) {
-        /* ICMP message is echo request */
+      if (icmp_hdr->icmp_type == 8 && icmp_hdr->icmp_code == 0) {
+        /* ICMP message is echo request */ 
+        send_ICMP_packet(sr, packet, interface, len, 0, 0);
+
+        /*
         uint16_t sent_sum = icmp_hdr->icmp_sum;
         icmp_hdr->icmp_sum = 0;
-
         if (sent_sum == cksum((void *) icmp_hdr, sizeof(struct sr_icmp_hdr))) {
-          /* valid checksum -- send ICMP echo reply */
-          send_ICMP_packet(sr, packet, interface, 0, 0);
+          
         }
+        */
       }
     }
   }
@@ -302,17 +304,21 @@ void sr_handlepacket(struct sr_instance* sr,
   * Sends ICMP packet to source sender
   */
 void send_ICMP_packet(struct sr_instance* sr, uint8_t* packet, char* iface, 
-                      uint8_t icmp_type, uint8_t icmp_code) {
+                      unsigned int len, uint8_t icmp_type, uint8_t icmp_code) {
   /* get the ethernet header */
-  struct sr_ethernet_hdr *eth_hdr_info = (struct sr_ethernet_hdr *) (packet);
+  struct sr_ethernet_hdr *eth_hdr_info = (struct sr_ethernet_hdr *)(packet);
 
-  /* get the ip header by stripping off ethernet header */
-  struct sr_ip_hdr *ip_hdr_info = (struct sr_ip_hdr *) (packet + sizeof(struct sr_ethernet_hdr));
+  /* get the ip header */
+  struct sr_ip_hdr *ip_hdr_info = (struct sr_ip_hdr *)(packet + sizeof(struct sr_ethernet_hdr));
+
+  /* get the ICMP header */
+  struct sr_icmp_hdr *icmp_hdr = (struct sr_icmp_hdr *)(packet + sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_ip_hdr));
 
   /* swap the IP src and dst */
   uint32_t temp = ip_hdr_info->ip_dst;
   ip_hdr_info->ip_dst = ip_hdr_info->ip_src;
   ip_hdr_info->ip_src = temp;
+  ip_hdr_info->ip_sum = cksum((void *)(ip_hdr_info), sizeof(struct sr_ip_hdr));
 
   /* swap the ethernet src and dst */
   int i;
@@ -326,13 +332,13 @@ void send_ICMP_packet(struct sr_instance* sr, uint8_t* packet, char* iface,
   struct sr_icmp_hdr payload;
   payload.icmp_type = icmp_type;
   payload.icmp_code = icmp_code;
-  /* add 2 numbers for check sum */
-  payload.icmp_sum = icmp_type + icmp_code;
+  payload.icmp_sum = 0;
 
   /* replace old payload with ICMP payload */
-  memcpy(ip_hdr_info + sizeof(struct sr_ip_hdr), &payload, sizeof(struct sr_icmp_hdr));
+  memcpy(icmp_hdr, &payload, sizeof(struct sr_icmp_hdr));
 
-  unsigned int len = sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_ip_hdr) + sizeof(struct sr_icmp_hdr);
+  /* calculate new ICMP checksum */
+  icmp_hdr->icmp_sum = cksum((void *)(icmp_hdr), sizeof(struct sr_icmp_hdr));
 
   sr_send_packet(sr, packet, len, iface);
 }
