@@ -173,7 +173,7 @@ void handle_ip_packet(struct sr_instance *sr, char* interface, unsigned int len,
   /*forwarding logic*/
   if(should_forward_packet(sr->if_list, ip_hdr_info)) {
     /*check if ttl == 0*/
-    if (ip_hdr_info->ip_ttl == 0) {
+    if (ip_hdr_info->ip_ttl == 1) {
       /* send ICMP with type 11, code 0 */
       send_ICMP_packet(sr, packet, interface, len, 11, 0);
       return;
@@ -308,19 +308,6 @@ void send_ICMP_packet(struct sr_instance* sr, uint8_t* packet, char* iface,
 
   struct sr_if *interf = sr_get_interface(sr, iface);
 
-  /* update the IP src and dst */
-  ip_hdr_info->ip_dst = ip_hdr_info->ip_src;
-  ip_hdr_info->ip_src = interf->ip;
-  ip_hdr_info->ip_sum = 0;
-  ip_hdr_info->ip_sum = cksum((void *)(ip_hdr_info), sizeof(struct sr_ip_hdr));
-
-  /* update the ethernet src and dst */
-  int i;
-  for (i = 0; i < ETHER_ADDR_LEN; i++) {
-    eth_hdr_info->ether_dhost[i] = eth_hdr_info->ether_shost[i];
-    eth_hdr_info->ether_shost[i] = interf->addr[i];
-  }
-
   if (icmp_type == 3) {
     struct sr_icmp_t3_hdr* icmp_t3_hdr = (struct sr_icmp_t3_hdr *)(icmp_hdr);
 
@@ -328,7 +315,11 @@ void send_ICMP_packet(struct sr_instance* sr, uint8_t* packet, char* iface,
     struct sr_icmp_t3_hdr payload;
     payload.icmp_type = icmp_type;
     payload.icmp_code = icmp_code;
+    payload.unused = 0;
+    payload.next_mtu = 0;
     payload.icmp_sum = 0;
+    memcpy(payload.data, ip_hdr_info, sizeof(struct sr_ip_hdr));
+    memcpy(payload.data + sizeof(struct sr_ip_hdr), icmp_hdr, 8);
 
     /* replace old payload with ICMP payload */
     memcpy(icmp_t3_hdr, &payload, sizeof(struct sr_icmp_t3_hdr));
@@ -349,6 +340,19 @@ void send_ICMP_packet(struct sr_instance* sr, uint8_t* packet, char* iface,
 
     /* calculate new ICMP checksum */
     icmp_hdr->icmp_sum = cksum((void *)(icmp_hdr), sizeof(struct sr_icmp_hdr));
+  }
+
+  /* update the IP src and dst */
+  ip_hdr_info->ip_dst = ip_hdr_info->ip_src;
+  ip_hdr_info->ip_src = interf->ip;
+  ip_hdr_info->ip_sum = 0;
+  ip_hdr_info->ip_sum = cksum((void *)(ip_hdr_info), sizeof(struct sr_ip_hdr));
+
+  /* update the ethernet src and dst */
+  int i;
+  for (i = 0; i < ETHER_ADDR_LEN; i++) {
+    eth_hdr_info->ether_dhost[i] = eth_hdr_info->ether_shost[i];
+    eth_hdr_info->ether_shost[i] = interf->addr[i];
   }
   
   sr_send_packet(sr, packet, len, iface);
