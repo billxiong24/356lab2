@@ -244,6 +244,11 @@ void handle_ip_packet(struct sr_instance *sr, char* interface, unsigned int len,
         */
       }
     }
+
+    else {
+      printf("Connection refused\n");
+      send_ICMP_packet(sr, packet, interface, len, 3, 3);
+    }
   }
 }
 
@@ -320,6 +325,8 @@ void send_ICMP_packet(struct sr_instance* sr, uint8_t* packet, char* iface,
     payload.unused = 0;
     payload.next_mtu = 0;
     payload.icmp_sum = 0;
+
+    ip_hdr_info->ip_sum = cksum((void *)(ip_hdr_info), sizeof(struct sr_ip_hdr));
     memcpy(payload.data, ip_hdr_info, sizeof(struct sr_ip_hdr));
     memcpy(payload.data + sizeof(struct sr_ip_hdr), icmp_hdr, 8);
 
@@ -327,6 +334,7 @@ void send_ICMP_packet(struct sr_instance* sr, uint8_t* packet, char* iface,
     memcpy(icmp_t3_hdr, &payload, sizeof(struct sr_icmp_t3_hdr));
 
     /* calculate new ICMP checksum */
+    icmp_t3_hdr->icmp_sum = 0;
     icmp_t3_hdr->icmp_sum = cksum((void *)(icmp_t3_hdr), sizeof(struct sr_icmp_t3_hdr));
     len = 70;
   }
@@ -340,6 +348,8 @@ void send_ICMP_packet(struct sr_instance* sr, uint8_t* packet, char* iface,
     payload.icmp_code = icmp_code;
     payload.unused = 0;
     payload.icmp_sum = 0;
+
+    ip_hdr_info->ip_sum = cksum((void *)(ip_hdr_info), sizeof(struct sr_ip_hdr));
     memcpy(payload.data, ip_hdr_info, sizeof(struct sr_ip_hdr));
     memcpy(payload.data + sizeof(struct sr_ip_hdr), icmp_hdr, 8);
 
@@ -347,6 +357,7 @@ void send_ICMP_packet(struct sr_instance* sr, uint8_t* packet, char* iface,
     memcpy(icmp_t11_hdr, &payload, sizeof(struct sr_icmp_t11_hdr));
 
     /* calculate new ICMP checksum */
+    icmp_t11_hdr->icmp_sum = 0;
     icmp_t11_hdr->icmp_sum = cksum((void *)(icmp_t11_hdr), sizeof(struct sr_icmp_t11_hdr));
     len = 70;
   }
@@ -368,6 +379,7 @@ void send_ICMP_packet(struct sr_instance* sr, uint8_t* packet, char* iface,
   /* update the IP src and dst */
   ip_hdr_info->ip_dst = ip_hdr_info->ip_src;
   ip_hdr_info->ip_src = interf->ip;
+  ip_hdr_info->ip_p = ip_protocol_icmp;
   ip_hdr_info->ip_sum = 0;
   ip_hdr_info->ip_sum = cksum((void *)(ip_hdr_info), sizeof(struct sr_ip_hdr));
 
