@@ -326,6 +326,7 @@ void send_ICMP_packet(struct sr_instance* sr, uint8_t* packet, char* iface,
 
     /* calculate new ICMP checksum */
     icmp_t3_hdr->icmp_sum = cksum((void *)(icmp_t3_hdr), sizeof(struct sr_icmp_t3_hdr));
+    len = 70;
   }
 
   else {
