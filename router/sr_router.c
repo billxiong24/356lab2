@@ -328,6 +328,26 @@ void send_ICMP_packet(struct sr_instance* sr, uint8_t* packet, char* iface,
     icmp_t3_hdr->icmp_sum = cksum((void *)(icmp_t3_hdr), sizeof(struct sr_icmp_t3_hdr));
     len = 70;
   }
+  if (icmp_type == 11) {
+    struct sr_icmp_t11_hdr* icmp_t11_hdr = (struct sr_icmp_t11_hdr *)(icmp_hdr);
+
+    /* get the payload */
+    struct sr_icmp_t11_hdr payload;
+    payload.icmp_type = icmp_type;
+    printf("ICMP CODE %d\n", icmp_code);
+    payload.icmp_code = icmp_code;
+    payload.unused = 0;
+    payload.icmp_sum = 0;
+    memcpy(payload.data, ip_hdr_info, sizeof(struct sr_ip_hdr));
+    memcpy(payload.data + sizeof(struct sr_ip_hdr), icmp_hdr, 8);
+
+    /* replace old payload with ICMP payload */
+    memcpy(icmp_t11_hdr, &payload, sizeof(struct sr_icmp_t11_hdr));
+
+    /* calculate new ICMP checksum */
+    icmp_t11_hdr->icmp_sum = cksum((void *)(icmp_t11_hdr), sizeof(struct sr_icmp_t11_hdr));
+    len = 70;
+  }
 
   else {
     /* get the payload */
