@@ -383,6 +383,7 @@ void send_ICMP_packet(struct sr_instance* sr, uint8_t* packet, char* iface,
   ip_hdr_info->ip_src = interf->ip;
   ip_hdr_info->ip_p = ip_protocol_icmp;
   ip_hdr_info->ip_sum = 0;
+  ip_hdr_info->ip_len = htons(sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t));
   ip_hdr_info->ip_sum = cksum((void *)(ip_hdr_info), sizeof(struct sr_ip_hdr));
 
   /* update the ethernet src and dst */
