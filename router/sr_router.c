@@ -321,17 +321,35 @@ void send_ICMP_packet(struct sr_instance* sr, uint8_t* packet, char* iface,
     eth_hdr_info->ether_shost[i] = interf->addr[i];
   }
 
-  /* get the payload */
-  struct sr_icmp_hdr payload;
-  payload.icmp_type = icmp_type;
-  payload.icmp_code = icmp_code;
-  payload.icmp_sum = 0;
+  if (icmp_type == 3) {
+    struct sr_icmp_t3_hdr* icmp_t3_hdr = (struct sr_icmp_t3_hdr *)(icmp_hdr);
 
-  /* replace old payload with ICMP payload */
-  memcpy(icmp_hdr, &payload, sizeof(struct sr_icmp_hdr));
+    /* get the payload */
+    struct sr_icmp_t3_hdr payload;
+    payload.icmp_type = icmp_type;
+    payload.icmp_code = icmp_code;
+    payload.icmp_sum = 0;
 
-  /* calculate new ICMP checksum */
-  icmp_hdr->icmp_sum = cksum((void *)(icmp_hdr), sizeof(struct sr_icmp_hdr));
+    /* replace old payload with ICMP payload */
+    memcpy(icmp_t3_hdr, &payload, sizeof(struct sr_icmp_t3_hdr));
 
+    /* calculate new ICMP checksum */
+    icmp_t3_hdr->icmp_sum = cksum((void *)(icmp_t3_hdr), sizeof(struct sr_icmp_t3_hdr));
+  }
+
+  else {
+    /* get the payload */
+    struct sr_icmp_hdr payload;
+    payload.icmp_type = icmp_type;
+    payload.icmp_code = icmp_code;
+    payload.icmp_sum = 0;
+
+    /* replace old payload with ICMP payload */
+    memcpy(icmp_hdr, &payload, sizeof(struct sr_icmp_hdr));
+
+    /* calculate new ICMP checksum */
+    icmp_hdr->icmp_sum = cksum((void *)(icmp_hdr), sizeof(struct sr_icmp_hdr));
+  }
+  
   sr_send_packet(sr, packet, len, iface);
 }
