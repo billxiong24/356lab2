@@ -335,11 +335,11 @@ void send_ICMP_packet(struct sr_instance* sr, uint8_t* packet, char* iface,
 
     /* calculate new ICMP checksum */
     icmp_t3_hdr->icmp_sum = 0;
-    icmp_t3_hdr->icmp_sum = cksum((void *)(icmp_t3_hdr), sizeof(struct sr_icmp_t3_hdr));
+    icmp_t3_hdr->icmp_sum = cksum((void *)(icmp_t3_hdr), 70 - sizeof(struct sr_ethernet_hdr) - sizeof(struct sr_ip_hdr));
     len = 70;
   }
 
-  if (icmp_type == 11) {
+  else if (icmp_type == 11) {
     struct sr_icmp_t11_hdr* icmp_t11_hdr = (struct sr_icmp_t11_hdr *)(icmp_hdr);
 
     /* get the payload */
@@ -358,7 +358,7 @@ void send_ICMP_packet(struct sr_instance* sr, uint8_t* packet, char* iface,
 
     /* calculate new ICMP checksum */
     icmp_t11_hdr->icmp_sum = 0;
-    icmp_t11_hdr->icmp_sum = cksum((void *)(icmp_t11_hdr), sizeof(struct sr_icmp_t11_hdr));
+    icmp_t11_hdr->icmp_sum = cksum((void *)(icmp_t11_hdr), 70 - sizeof(struct sr_ethernet_hdr) - sizeof(struct sr_ip_hdr));
     len = 70;
   }
 
@@ -375,6 +375,8 @@ void send_ICMP_packet(struct sr_instance* sr, uint8_t* packet, char* iface,
     /* calculate new ICMP checksum */
     icmp_hdr->icmp_sum = cksum((void *)(icmp_hdr), sizeof(struct sr_icmp_hdr));
   }
+
+  struct sr_icmp_t3_hdr* icmp_t3_hdr = (struct sr_icmp_t3_hdr *)(icmp_hdr);
 
   /* update the IP src and dst */
   ip_hdr_info->ip_dst = ip_hdr_info->ip_src;
