@@ -175,6 +175,7 @@ void handle_ip_packet(struct sr_instance *sr, char* interface, unsigned int len,
     /*check if ttl == 0*/
     if (ip_hdr_info->ip_ttl == 1) {
       /* send ICMP with type 11, code 0 */
+      printf("TTL expired\n");
       send_ICMP_packet(sr, packet, interface, len, 11, 0);
       return;
     }
@@ -194,6 +195,7 @@ void handle_ip_packet(struct sr_instance *sr, char* interface, unsigned int len,
       /* send ICMP with type 3, code 0 */
       printf("No matching entry in routing table\n");
       send_ICMP_packet(sr, packet, interface, len, 3, 0);
+      return;
     }
 
     /* use ARP to set destination ethernet address */
@@ -328,13 +330,13 @@ void send_ICMP_packet(struct sr_instance* sr, uint8_t* packet, char* iface,
     icmp_t3_hdr->icmp_sum = cksum((void *)(icmp_t3_hdr), sizeof(struct sr_icmp_t3_hdr));
     len = 70;
   }
+
   if (icmp_type == 11) {
     struct sr_icmp_t11_hdr* icmp_t11_hdr = (struct sr_icmp_t11_hdr *)(icmp_hdr);
 
     /* get the payload */
     struct sr_icmp_t11_hdr payload;
     payload.icmp_type = icmp_type;
-    printf("ICMP CODE %d\n", icmp_code);
     payload.icmp_code = icmp_code;
     payload.unused = 0;
     payload.icmp_sum = 0;
